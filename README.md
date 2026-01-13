@@ -17,6 +17,10 @@ A simple Task Management app built using Flutter.
 - BLoC
 
 ## 📱 Screenshots
+![Splash Screen](example/1.jpg)
+![Home Screen](example/2.jpg)
+![Pomodoro Screen](example/3.png)
+![Setting Screen](example/4.png)
 
 ## 🔧 How to Run
 flutter pub get  
