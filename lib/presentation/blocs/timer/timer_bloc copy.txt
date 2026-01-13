@@ -1,0 +1,184 @@
+import 'dart:async';
+import 'package:bloc/bloc.dart';
+import 'package:equatable/equatable.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:task_Management/core/utils/snackbar.dart';
+import '../../../models/timer/timer_models.dart';
+
+// part 'timer_event.dart';
+// part 'timer_state.dart';
+
+class TimerBloc extends Bloc<TimerEvent, TimerState> {
+  Timer? timer;
+  final Ticker _ticker;
+  int duration = 0;
+  bool isFocusTime = true;
+  int currentSession = 0;
+  int sessiontime = 0;
+  int focusTime = 0;
+  int restTime = 0;
+
+  /// to listen to the ticker stream
+  StreamSubscription<int>? _tickerSubscription;
+
+  TimerBloc({required Ticker ticker})
+      : _ticker = ticker,
+
+        /// we have to specify the initial stage
+        super(TimerInitial(0, true, 0)) {
+    on<TimerSetting>(_onSetting);
+    on<TimerStarted>(_onStarted);
+    on<TimerFocus>(_onFocusTime);
+    on<TimerRest>(_onRestTime);
+    on<TimerFinised>(_ontimerFinished);
+    on<TimerTicked>(_onTicked);
+    on<TimerPaused>(_onPaused);
+    on<TimerResumed>(_onResumed);
+    on<TimerReset>(_onReset);
+  }
+
+  @override
+  Future<void> close() {
+    timer?.cancel();
+    _tickerSubscription?.cancel();
+    return super.close();
+  }
+
+  void _onSetting(TimerSetting event, Emitter<TimerState> emit) {
+    isFocusTime = event.isFocusTime;
+    sessiontime = event.sessionTime;
+    focusTime = event.focusTime;
+    restTime = event.restTime;
+    duration = focusTime;
+    emit(TimerInitial(duration, isFocusTime, currentSession));
+    print(currentSession);
+    print(sessiontime);
+  }
+
+  void _onStarted(TimerStarted event, Emitter<TimerState> emit) {
+    
+
+    /// In case of there is an subscription exists, we have to cancel it
+    if (currentSession < sessiontime) {
+      
+      if (isFocusTime) {
+        add(TimerFocus(focusTime, true, currentSession));
+      } else {
+        add(TimerRest(
+            restTime, false, currentSession)); // Tambahkan event istirahat
+      }
+    } else if (currentSession == sessiontime) {
+      // add(TimerFinised(currentSession));
+      emit(TimerDone(0));
+      timer = Timer(Duration(seconds: 1), () {
+        add(TimerReset());
+      });
+      currentSession = 0;
+      print(currentSession);
+      print("timer has done");
+      print(state);
+    }
+  }
+
+  void _onFocusTime(TimerFocus event, Emitter<TimerState> emit) {
+    /// triggers the TimerRunInProgress state
+    emit(TimerRunInProgress(focusTime));
+
+    /// makes the subscription listen to TimerTicked state
+    _tickerSubscription = _ticker
+        .tick(ticks: event.duration)
+        .listen((duration) => add(TimerTicked(duration)));
+
+    emit(FocusTime(duration, currentSession));
+
+    duration = restTime;
+    isFocusTime = false;
+    add(TimerStarted(restTime, false, currentSession));
+    // timer = Timer(Duration(seconds: focusTime), () {
+      
+    // });
+    _tickerSubscription?.cancel;
+    print(state);
+  }
+
+  void _onRestTime(TimerRest event, Emitter<TimerState> emit) {
+    /// triggers the TimerRunInProgress state
+    emit(TimerRunInProgress(restTime));
+
+    /// makes the subscription listen to TimerTicked state
+    _tickerSubscription = _ticker
+        .tick(ticks: event.duration)
+        .listen((duration) => add(TimerTicked(duration)));
+    emit(RestTime(duration));
+    duration = focusTime;
+    isFocusTime = true;
+    currentSession++;
+    add(TimerStarted(focusTime, true, currentSession));
+    // timer = Timer(Duration(seconds: restTime), () {
+
+    // });
+    print(state);
+  }
+
+  void _ontimerFinished(TimerFinised event, Emitter<TimerState> emit) {
+    currentSession = 0;
+    emit(TimerDone(duration));
+  }
+
+  void _onTicked(TimerTicked event, Emitter<TimerState> emit) {
+    emit(event.duration > 0
+        ? TimerRunInProgress(event.duration)
+
+        /// triggers the TimerRunInProgress state
+        : const TimerRunComplete());
+
+    /// triggers TimerRunComplete state
+  }
+
+  void _onPaused(TimerPaused event, Emitter<TimerState> emit) {
+    /// As the timer pause, we should pause the subscription also
+    _tickerSubscription?.pause();
+    emit(TimerRunPause(state.duration));
+
+    /// triggers the TimerRunPause state
+  }
+
+  void _onResumed(TimerResumed event, Emitter<TimerState> emit) {
+    _tickerSubscription?.resume();
+    emit(TimerRunInProgress(state.duration));
+
+    /// As the timer resume, we must let the subscription resume also
+
+    /// triggers the TimerRunInProgress state
+  }
+
+  void _onReset(TimerReset event, Emitter<TimerState> emit) {
+    // Cancel timer jika ada
+    if (timer != null) {
+      timer!.cancel();
+      timer = null; // Pastikan referensi dihapus
+    }
+
+    // Cancel ticker subscription jika ada
+    if (_tickerSubscription != null) {
+      _tickerSubscription!.cancel();
+      _tickerSubscription = null; // Pastikan referensi dihapus
+    }
+
+    // Reset flag dan state
+    isFocusTime = true;
+    sessiontime = 0;
+
+    // Emit state awal
+    emit(TimerInitial(0, true, 0));
+
+    print("Timer and ticker reset successfully");
+    // timer?.cancel();
+    // isFocusTime = true;
+    // /// Timer counting finished, so we must cancel the subscription
+    // _tickerSubscription?.cancel();
+    // emit(TimerInitial(0, true, 0));
+
+    // /// triggers the TimerInitial state
+  }
+}
